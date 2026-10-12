@@ -170,11 +170,18 @@ function pickDistractors(pack: Pack, word: Word, rng: () => number, count: numbe
   return picked;
 }
 
-/** Strip case, accents, and surrounding punctuation so "Qué" matches "que". */
+/**
+ * Strip case, accents, and surrounding punctuation so "Qué" matches "que".
+ *
+ * Only Latin accents go, and the rest is recomposed. Decomposing alone split
+ * が into か and a voicing mark the punctuation filter then dropped, so が and
+ * か compared equal and みす passed for みず.
+ */
 export function normalize(text: string): string {
   return text
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .normalize("NFC")
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s'-]/gu, "")
     .trim()
