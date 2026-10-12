@@ -149,7 +149,8 @@ export async function generatePack(
       // usually a truncation, so retry once at half the size; if that fails too,
       // stop and keep what we have — throwing here discarded 693 words of
       // French and 673 of Italian, about half an hour of somebody's quota.
-      onProgress?.(words.length, count, `chunk ${from}: ${(error as Error).message}; retrying smaller`);
+      failure = (error as Error).message;
+      onProgress?.(words.length, count, `chunk ${from}: ${failure}; retrying smaller`);
       try {
         entries = await packChunk(
           ask,
@@ -200,8 +201,17 @@ export async function generatePack(
       failure ? `Claude returned no words (last error: ${failure})` : "Claude returned no words",
     );
   }
+  // This note is the one a short pack is reported with, so it must not blame the
+  // ranks when a failed chunk is what cost the words. It used to, whatever had
+  // happened, and a 150-word Japanese pack could not say why it was short.
   if (words.length < count) {
-    onProgress?.(words.length, count, `stopped at ${words.length}: the ranks asked for are used up`);
+    onProgress?.(
+      words.length,
+      count,
+      failure
+        ? `stopped at ${words.length} after a chunk failed (last error: ${failure})`
+        : `stopped at ${words.length}: the ranks asked for are used up`,
+    );
   }
   return { code, name: language, englishName: language, words };
 }

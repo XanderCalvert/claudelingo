@@ -132,6 +132,29 @@ describe('pack generation', () => {
     expect(notes.join(' ')).toContain('failed twice')
   })
 
+  /**
+   * A short pack is reported with the last note alone, so that note has to say
+   * a chunk failed. Blaming the ranks hid the cause of a short Japanese pack.
+   */
+  it('says a short pack was cut short by a failure, not by the ranks', async () => {
+    const notes: string[] = []
+    const onProgress = (_done: number, _total: number, note?: string) => {
+      if (note) notes.push(note)
+    }
+
+    await generatePack(fakeModel([words(1, 100), 'nope', 'still nope']).ask, 'X', 'xx', 300, {
+      onProgress,
+    })
+
+    expect(notes.at(-1)).toContain('after a chunk failed')
+    expect(notes.at(-1)).toContain('valid JSON')
+
+    notes.length = 0
+    await generatePack(fakeModel([words(1, 50)]).ask, 'X', 'xx', 1000, { onProgress })
+
+    expect(notes.at(-1)).toContain('the ranks asked for are used up')
+  })
+
   it('throws only when it got nothing at all', async () => {
     // Both shapes of nothing: a reply that will not parse, twice over, and one
     // that parses to an empty list.
