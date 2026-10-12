@@ -73,6 +73,11 @@ async function packChunk(
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/, "")
     .trim();
+  // Told apart from bad JSON because the fixes differ: a long reply that will
+  // not parse was cut off, while an empty one never started.
+  if (!body) {
+    throw new EnrichError(`Claude sent an empty reply for words ${from}-${from + size - 1}`);
+  }
   let parsed: { words?: GeneratedEntry[] };
   try {
     parsed = JSON.parse(body) as { words?: GeneratedEntry[] };
@@ -129,6 +134,7 @@ export async function generatePack(
   const maxChunks = Math.ceil(count / PACK_CHUNK);
   let from = Math.floor(words.length / PACK_CHUNK) * PACK_CHUNK + 1;
   let barren = 0;
+  let failure: string | undefined;
 
   for (let chunk = 0; chunk < maxChunks && words.length < count && barren < 3; chunk++) {
     const size = Math.min(PACK_CHUNK, Math.max(20, count - words.length));
@@ -153,7 +159,8 @@ export async function generatePack(
           [...seen].slice(-120),
         );
       } catch (retryError) {
-        onProgress?.(words.length, count, `chunk ${from} failed twice: ${(retryError as Error).message}`);
+        failure = (retryError as Error).message;
+        onProgress?.(words.length, count, `chunk ${from} failed twice: ${failure}`);
         break;
       }
     }
@@ -185,7 +192,14 @@ export async function generatePack(
     from += PACK_CHUNK;
   }
 
-  if (!words.length) throw new EnrichError("Claude returned no words");
+  // The reason goes in the error itself: a run with nothing to show is reported
+  // from the catch, which never sees the progress notes, and "no words" alone
+  // cannot tell a refused model from a cut-off reply.
+  if (!words.length) {
+    throw new EnrichError(
+      failure ? `Claude returned no words (last error: ${failure})` : "Claude returned no words",
+    );
+  }
   if (words.length < count) {
     onProgress?.(words.length, count, `stopped at ${words.length}: the ranks asked for are used up`);
   }

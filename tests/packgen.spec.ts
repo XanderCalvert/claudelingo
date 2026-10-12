@@ -149,6 +149,24 @@ describe('pack generation', () => {
   })
 
   /**
+   * When nothing comes back the error is all the person sees: the progress
+   * notes that say why are dropped on that path, so the reason has to travel in
+   * the error. "No words" on its own cannot tell a refused model from a reply
+   * cut off by its token cap.
+   */
+  it('says why, when it got nothing at all', async () => {
+    const refused: Asker = async () => {
+      throw new Error('no such model: haiku-3')
+    }
+
+    await expect(generatePack(refused, 'X', 'xx', 10)).rejects.toThrow(/no such model: haiku-3/)
+    await expect(generatePack(fakeModel(['']).ask, 'X', 'xx', 10)).rejects.toThrow(/empty reply/)
+    await expect(generatePack(fakeModel(['{"words":[{"te']).ask, 'X', 'xx', 10)).rejects.toThrow(
+      /valid JSON/,
+    )
+  })
+
+  /**
    * `note` is the gender or irregularity that makes a card answerable, and it
    * has to survive the round trip into the pack's compact row form.
    */
