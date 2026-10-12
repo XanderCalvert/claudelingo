@@ -1,4 +1,5 @@
 import { blankTerm } from "./cloze";
+import { kanaToRomaji, sameReading } from "./kana";
 import type { Card, CardKind, ItemProgress, Pack, Progress, Settings, Word } from "./types";
 
 const MINUTE = 60_000;
@@ -198,6 +199,22 @@ export function buildCard(pack: Pack, word: Word, item: ItemProgress | null, rng
     return { kind, word, prompt: word.term, choices: [], answerIndex: -1, accepted: [word.term] };
   }
 
+  if (kind === "recall" && word.readings?.length) {
+    // A script is produced by reading it, not by spelling it: typing 水 needs a
+    // Japanese keyboard, and the keyboard would do the remembering. So the
+    // character is shown and its reading is typed, in romaji or kana. The first
+    // accepted answer is what the verdict shows when it is got wrong.
+    const romaji = word.readings.map((r) => kanaToRomaji(r) ?? r);
+    return {
+      kind,
+      word,
+      prompt: word.term,
+      choices: [],
+      answerIndex: -1,
+      accepted: [pack.kind === "kana" ? word.gloss : romaji.join(" / "), ...word.readings],
+    };
+  }
+
   if (kind === "recall") {
     return {
       kind,
@@ -252,7 +269,10 @@ export function isCorrect(card: Card, response: { choice?: number; text?: string
     }
     return false;
   }
-  return typed.length > 0 && card.accepted.some((a) => normalize(a) === typed);
+  return (
+    typed.length > 0 &&
+    card.accepted.some((a) => normalize(a) === typed || sameReading(a, response.text ?? ""))
+  );
 }
 
 function freshItem(id: string, now: number): ItemProgress {
